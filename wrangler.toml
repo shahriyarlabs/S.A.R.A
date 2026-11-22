@@ -3,13 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
 [vars]
-GEMINI_MODEL = "gemini-2.5-flash"
+CLAUDE_MODEL = "claude-haiku-5-5"
 TIMEZONE = "Asia/Dhaka"
-# নীরব সময় (২৪-ঘণ্টার ফরম্যাটে, যেমন রাত ১১টা = 23, সকাল ৭টা = 7)
+# নীরব সময় (২৪-ঘণ্টার ফরম্যাটে, যেমন রাত ১১টা = 23, সকাল ৭টা = 7)
 QUIET_START_HOUR = "23"
 QUIET_END_HOUR = "7"
 
-# Cloudflare Cron Triggers (সবসময় UTC সময়ে চলে; ঢাকা = UTC+6)
+# Cloudflare Cron Triggers (সবসময় UTC সময়ে চলে; ঢাকা = UTC+6)
 # "0 2 * * *"    -> প্রতিদিন সকাল ৮:০০টা (ঢাকা)
 # "0 15 * * *"   -> প্রতিদিন রাত ৯:০০টা (ঢাকা)
 # "*/15 * * * *" -> প্রতি ১৫ মিনিটে ডেডলাইন রিমাইন্ডার চেক

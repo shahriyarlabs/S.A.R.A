@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   status TEXT NOT NULL DEFAULT 'open',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at TEXT,
-  reminded_at TEXT
+  reminded_at TEXT,
+  recurrence TEXT
 );
 
 CREATE TABLE IF NOT EXISTS decisions (

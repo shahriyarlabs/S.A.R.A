@@ -176,11 +176,11 @@ export default {
         escapeHtml(extracted.reply_bn)
       );
     } catch (err) {
-      console.error("Handler error:", err);
+      console.error("Handler error:", err instanceof Error ? err.message : String(err));
       await sendTelegramMessage(
         env.TELEGRAM_BOT_TOKEN,
         chatId,
-        "দুঃখিত, বার্তাটি প্রক্রিয়া করতে একটি সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।"
+        "দুঃখিত, বার্তাটি প্রক্রিয়া করতে একটি সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।"
       );
     }
 

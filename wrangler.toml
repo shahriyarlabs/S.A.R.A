@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
 [vars]
-GEMINI_MODEL = "gemini-2.5-pro"
+GEMINI_MODEL = "gemini-2.5-flash"
 TIMEZONE = "Asia/Dhaka"
 # নীরব সময় (২৪-ঘণ্টার ফরম্যাটে, যেমন রাত ১১টা = 23, সকাল ৭টা = 7)
 QUIET_START_HOUR = "23"

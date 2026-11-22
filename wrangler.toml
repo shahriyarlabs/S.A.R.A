@@ -1,6 +1,9 @@
-name = "sara-bot"
+name = "s-a-r-a"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+
+[observability]
+enabled = true
 
 [vars]
 CLAUDE_MODEL = "claude-haiku-5-5"

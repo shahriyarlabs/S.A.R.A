@@ -6,10 +6,7 @@ export function isQuietHours(env: Env): boolean {
   const { hour } = getLocalDateTimeParts(env.TIMEZONE || "Asia/Dhaka");
   const start = Number(env.QUIET_START_HOUR ?? 23);
   const end = Number(env.QUIET_END_HOUR ?? 7);
-
-  if (start > end) {
-    return hour >= start || hour < end;
-  }
+  if (start > end) return hour >= start || hour < end;
   return hour >= start && hour < end;
 }
 
@@ -28,42 +25,38 @@ export async function buildMorningReport(env: Env): Promise<string> {
   ).all<TaskRow>();
 
   const todayTasks = openTasks.filter((t) => t.due_date && t.due_date.startsWith(today));
-  const overdueTasks = openTasks.filter(
-    (t) => t.due_date && t.due_date.slice(0, 10) < today
-  );
-  const otherTasks = openTasks.filter(
-    (t) => !t.due_date || t.due_date.slice(0, 10) > today
-  );
+  const overdueTasks = openTasks.filter((t) => t.due_date && t.due_date.slice(0, 10) < today);
+  const otherTasks = openTasks.filter((t) => !t.due_date || t.due_date.slice(0, 10) > today);
 
-  const lines: string[] = [`<b>সুপ্রভাত! আজকের কাজের তালিকা (${today})</b>`];
+  const lines: string[] = [`<b>Good morning! Your plan for today (${today})</b>`];
 
   if (todayTasks.length) {
-    lines.push("", "<b>আজকের নির্ধারিত কাজ:</b>");
+    lines.push("", "<b>Due today:</b>");
     todayTasks.forEach((t) =>
       lines.push(`• <b>#${t.id}</b> ${escapeHtml(t.title)} (${escapeHtml(t.due_date!)})${repeatMark(t)}`)
     );
   }
 
   if (overdueTasks.length) {
-    lines.push("", "<b>পুরোনো অসম্পন্ন কাজ (সময় পার হয়েছে):</b>");
+    lines.push("", "<b>Overdue:</b>");
     overdueTasks.forEach((t) =>
       lines.push(`• <b>#${t.id}</b> ${escapeHtml(t.title)} (${escapeHtml(t.due_date!)})${repeatMark(t)}`)
     );
   }
 
   if (otherTasks.length) {
-    lines.push("", "<b>অন্যান্য খোলা কাজ:</b>");
+    lines.push("", "<b>Other open tasks:</b>");
     otherTasks.slice(0, 10).forEach((t) => {
       const due = t.due_date ? ` (${escapeHtml(t.due_date)})` : "";
       lines.push(`• <b>#${t.id}</b> ${escapeHtml(t.title)}${due}${repeatMark(t)}`);
     });
     if (otherTasks.length > 10) {
-      lines.push(`<i>… আরও ${otherTasks.length - 10}টি (/tasks দেখুন)</i>`);
+      lines.push(`<i>… and ${otherTasks.length - 10} more (see /tasks)</i>`);
     }
   }
 
   if (!openTasks.length) {
-    lines.push("", "আজ কোনো খোলা করণীয় নেই। আপনার দিনটি শুভ হোক!");
+    lines.push("", "No open tasks today. Have a great day!");
   }
 
   return lines.join("\n");
@@ -74,20 +67,15 @@ export async function buildNightReport(env: Env): Promise<string> {
   const { dateStr: today } = getLocalDateTimeParts(tz);
   const { dateStr: tomorrow } = getLocalDateTimeParts(tz, 1);
 
-  // টাইমজোন-নিরপেক্ষ: গত ২ দিনের রেকর্ড এনে JS-এ স্থানীয় তারিখ মিলিয়ে নেওয়া হয়
   const { results: recentDone } = await env.DB.prepare(
     "SELECT id, title, completed_at FROM tasks WHERE status = 'done' AND completed_at >= datetime('now', '-2 days') ORDER BY id DESC"
   ).all<TaskRow>();
-  const doneToday = recentDone.filter(
-    (t) => utcSqlToLocalDate(t.completed_at, tz) === today
-  );
+  const doneToday = recentDone.filter((t) => utcSqlToLocalDate(t.completed_at, tz) === today);
 
   const { results: recentDecisions } = await env.DB.prepare(
     "SELECT id, summary, created_at FROM decisions WHERE created_at >= datetime('now', '-2 days') ORDER BY id DESC"
   ).all<DecisionRow>();
-  const decisionsToday = recentDecisions.filter(
-    (d) => utcSqlToLocalDate(d.created_at, tz) === today
-  );
+  const decisionsToday = recentDecisions.filter((d) => utcSqlToLocalDate(d.created_at, tz) === today);
 
   const { results: tomorrowTasks } = await env.DB.prepare(
     "SELECT id, title, due_date, recurrence FROM tasks WHERE status = 'open' AND due_date LIKE ? ORDER BY due_date ASC"
@@ -100,45 +88,42 @@ export async function buildNightReport(env: Env): Promise<string> {
   ).first<{ n: number }>();
   const totalOpen = countRow?.n ?? 0;
 
-  const lines: string[] = [`<b>আজকের সারসংক্ষেপ (${today})</b>`];
+  const lines: string[] = [`<b>Daily summary (${today})</b>`];
 
-  lines.push("", `<b>আজ সম্পন্ন হয়েছে (${doneToday.length}টি):</b>`);
+  lines.push("", `<b>Completed today (${doneToday.length}):</b>`);
   if (doneToday.length) {
     doneToday.forEach((t) => lines.push(`• #${t.id} ${escapeHtml(t.title)}`));
   } else {
-    lines.push("• আজ কোনো কাজ সম্পন্ন হিসেবে চিহ্নিত হয়নি।");
+    lines.push("• Nothing marked as done today.");
   }
 
   if (decisionsToday.length) {
-    lines.push("", `<b>আজকের সিদ্ধান্ত (${decisionsToday.length}টি):</b>`);
+    lines.push("", `<b>Decisions today (${decisionsToday.length}):</b>`);
     decisionsToday.forEach((d) => lines.push(`• #${d.id} ${escapeHtml(d.summary)}`));
   }
 
-  lines.push("", `<b>আগামীকাল (${tomorrow}) করণীয়:</b>`);
+  lines.push("", `<b>Tomorrow (${tomorrow}):</b>`);
   if (tomorrowTasks.length) {
     tomorrowTasks.forEach((t) =>
       lines.push(`• <b>#${t.id}</b> ${escapeHtml(t.title)} (${escapeHtml(t.due_date!)})${repeatMark(t)}`)
     );
   } else {
-    lines.push("• আগামীকালের জন্য নির্দিষ্ট তারিখের কোনো কাজ নেই।");
+    lines.push("• Nothing scheduled for tomorrow.");
   }
 
   if (totalOpen > 0) {
-    lines.push("", `<i>মোট অসম্পন্ন খোলা কাজ: ${totalOpen}টি (/tasks দিয়ে দেখুন)</i>`);
+    lines.push("", `<i>Total open tasks: ${totalOpen} (see /tasks)</i>`);
   }
 
   return lines.join("\n");
 }
 
 export async function checkDueReminders(env: Env, chatId: number): Promise<void> {
-  if (isQuietHours(env)) {
-    return;
-  }
+  if (isQuietHours(env)) return;
 
   const tz = env.TIMEZONE || "Asia/Dhaka";
   const { dateTimeStr } = getLocalDateTimeParts(tz);
 
-  // REPLACE(...'T'...) পুরোনো রেকর্ডে ভুল ফরম্যাট থাকলেও তুলনা ঠিক রাখে
   const { results } = await env.DB.prepare(
     `SELECT id, title, due_date FROM tasks
      WHERE status = 'open'
@@ -155,9 +140,8 @@ export async function checkDueReminders(env: Env, chatId: number): Promise<void>
     await sendTelegramMessage(
       env.TELEGRAM_BOT_TOKEN,
       chatId,
-      `⏰ <b>S.A.R.A. রিমাইন্ডার:</b> #${task.id} ${escapeHtml(task.title)}\nনির্ধারিত সময়: ${escapeHtml(task.due_date!)}\n<i>সম্পন্ন হলে /done ${task.id}</i>`
+      `⏰ <b>S.A.R.A. reminder:</b> #${task.id} ${escapeHtml(task.title)}\nDue: ${escapeHtml(task.due_date!)}\n<i>When finished: /done ${task.id}</i>`
     );
-
     await env.DB.prepare("UPDATE tasks SET reminded_at = datetime('now') WHERE id = ?")
       .bind(task.id)
       .run();
@@ -172,11 +156,9 @@ export async function handleScheduled(cron: string, env: Env): Promise<void> {
   }
 
   if (cron === "0 2 * * *") {
-    const report = await buildMorningReport(env);
-    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, report);
+    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, await buildMorningReport(env));
   } else if (cron === "0 15 * * *") {
-    const report = await buildNightReport(env);
-    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, report);
+    await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, chatId, await buildNightReport(env));
   } else {
     await checkDueReminders(env, chatId);
   }

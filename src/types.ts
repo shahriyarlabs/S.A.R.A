@@ -26,7 +26,7 @@ export interface ExtractedDecision {
 export interface ExtractionResult {
   decisions: ExtractedDecision[];
   tasks: ExtractedTask[];
-  reply_bn: string;
+  reply: string;
 }
 
 export interface TaskRow {

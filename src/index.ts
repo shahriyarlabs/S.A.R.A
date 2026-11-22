@@ -14,26 +14,26 @@ interface TelegramUpdate {
 }
 
 const RECURRENCE_BN: Record<string, string> = {
-  daily: "প্রতিদিন",
-  weekly: "প্রতি সপ্তাহে",
-  monthly: "প্রতি মাসে",
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
 };
 
 const HELP_TEXT = [
-  "<b>কমান্ডসমূহ:</b>",
-  "/tasks — খোলা করণীয় দেখুন",
-  "/done &lt;id&gt; — করণীয় সম্পন্ন করুন",
-  "/edit &lt;id&gt; &lt;নতুন শিরোনাম&gt; — শিরোনাম বদলান",
-  "/due &lt;id&gt; &lt;YYYY-MM-DD [HH:MM]&gt; — ডেডলাইন বদলান (<code>/due 3 clear</code> দিলে মুছে যাবে)",
-  "/delete &lt;id&gt; — করণীয় মুছে ফেলুন",
-  "/decisions — সাম্প্রতিক সিদ্ধান্ত দেখুন",
-  "/report — সকাল ও রাতের রিপোর্ট এখনই দেখুন",
+  "<b>Commands:</b>",
+  "/tasks — show open tasks",
+  "/done &lt;id&gt; — mark a task as done",
+  "/edit &lt;id&gt; &lt;new title&gt; — rename a task",
+  "/due &lt;id&gt; &lt;YYYY-MM-DD [HH:MM]&gt; — change a deadline (<code>/due 3 clear</code> removes it)",
+  "/delete &lt;id&gt; — delete a task",
+  "/decisions — show recent decisions",
+  "/report — show the morning and night reports now",
   "",
-  "সাধারণ বার্তা পাঠালে আমি নিজেই করণীয় ও সিদ্ধান্ত বের করে নেব। \"প্রতিদিন\", \"প্রতি সপ্তাহে\" লিখলে পুনরাবৃত্ত কাজ হিসেবে সংরক্ষিত হবে।",
+  "Just send me a normal message and I will pull out the tasks and decisions. Words like \"every day\" or \"every week\" create repeating tasks.",
 ].join("\n");
 
 function formatTask(t: TaskRow): string {
-  const due = t.due_date ? ` (সময়: ${escapeHtml(t.due_date)})` : "";
+  const due = t.due_date ? ` (due: ${escapeHtml(t.due_date)})` : "";
   const rep = t.recurrence ? ` 🔁 ${RECURRENCE_BN[t.recurrence] ?? ""}` : "";
   return `• <b>#${t.id}</b> ${escapeHtml(t.title)}${due}${rep}`;
 }
@@ -46,7 +46,20 @@ function parseId(s: string | undefined): number | null {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method !== "POST") {
-      return new Response("S.A.R.A. Bot is running.", { status: 200 });
+      // Status page: shows which settings are missing (never shows secret values)
+      const check = (v: unknown) => (v ? "OK" : "MISSING");
+      return new Response(
+        [
+          "S.A.R.A. Bot is running.",
+          `TELEGRAM_BOT_TOKEN: ${check(env.TELEGRAM_BOT_TOKEN)}`,
+          `ANTHROPIC_API_KEY: ${check(env.ANTHROPIC_API_KEY)}`,
+          `ALLOWED_TELEGRAM_USER_ID: ${check(env.ALLOWED_TELEGRAM_USER_ID)}`,
+          `WEBHOOK_SECRET: ${check(env.WEBHOOK_SECRET)}`,
+          `DB binding: ${check(env.DB)}`,
+          `CLAUDE_MODEL: ${env.CLAUDE_MODEL || "(default claude-haiku-5-5)"}`,
+        ].join("\n"),
+        { status: 200 }
+      );
     }
 
     // সিক্রেট না থাকলে বা না মিললে অ্যাক্সেস বন্ধ (fail-closed)
@@ -92,10 +105,10 @@ export default {
           case "/start":
             await send(
               [
-                "<b>স্বাগতম! আমি S.A.R.A.</b>",
+                "<b>Welcome! I am S.A.R.A.</b>",
                 "<i>Smart Assistant for Reminders &amp; Actions</i>",
                 "",
-                "যেকোনো আলোচনা বা নোট পাঠালে আমি তা থেকে <b>সিদ্ধান্ত</b> ও <b>করণীয়</b> বের করে মনে রাখব এবং সময়মতো রিমাইন্ডার দেব।",
+                "Send me any note or discussion and I will extract the <b>decisions</b> and <b>tasks</b>, remember them, and remind you on time.",
                 "",
                 HELP_TEXT,
               ].join("\n")
@@ -116,10 +129,10 @@ export default {
             const total = countRow?.n ?? results.length;
 
             if (!results.length) {
-              await send("কোনো খোলা করণীয় নেই।");
+              await send("No open tasks.");
             } else {
-              const more = total > results.length ? `\n<i>… মোট ${total}টির মধ্যে সাম্প্রতিক ${results.length}টি দেখানো হলো</i>` : "";
-              await send(`<b>খোলা করণীয়:</b>\n${results.map(formatTask).join("\n")}${more}`);
+              const more = total > results.length ? `\n<i>… showing the latest ${results.length} of ${total}</i>` : "";
+              await send(`<b>Open tasks:</b>\n${results.map(formatTask).join("\n")}${more}`);
             }
             return new Response("OK", { status: 200 });
           }
@@ -127,7 +140,7 @@ export default {
           case "/done": {
             const taskId = parseId(argParts[0]);
             if (!taskId) {
-              await send("সঠিক নিয়ম: <code>/done 1</code>");
+              await send("Usage: <code>/done 1</code>");
               return new Response("OK", { status: 200 });
             }
 
@@ -138,7 +151,7 @@ export default {
               .first<TaskRow>();
 
             if (!task) {
-              await send(`খোলা করণীয় #${taskId} পাওয়া যায়নি।`);
+              await send(`Open task #${taskId} not found.`);
               return new Response("OK", { status: 200 });
             }
 
@@ -161,8 +174,8 @@ export default {
 
             await send(
               nextDue
-                ? `করণীয় #${taskId} সম্পন্ন হয়েছে। 🔁 পরবর্তী কাজ তৈরি হয়েছে: ${escapeHtml(nextDue)}`
-                : `করণীয় #${taskId} সম্পন্ন হিসেবে চিহ্নিত হয়েছে।`
+                ? `Task #${taskId} done. 🔁 Next one created for ${escapeHtml(nextDue)}`
+                : `Task #${taskId} marked as done.`
             );
             return new Response("OK", { status: 200 });
           }
@@ -171,7 +184,7 @@ export default {
             const taskId = parseId(argParts[0]);
             const newTitle = argParts.slice(1).join(" ").trim();
             if (!taskId || !newTitle) {
-              await send("সঠিক নিয়ম: <code>/edit 1 নতুন শিরোনাম</code>");
+              await send("Usage: <code>/edit 1 new title</code>");
               return new Response("OK", { status: 200 });
             }
             const res = await env.DB.prepare(
@@ -181,8 +194,8 @@ export default {
               .run();
             await send(
               res.meta.changes > 0
-                ? `করণীয় #${taskId} আপডেট হয়েছে।`
-                : `খোলা করণীয় #${taskId} পাওয়া যায়নি।`
+                ? `Task #${taskId} updated.`
+                : `Open task #${taskId} not found.`
             );
             return new Response("OK", { status: 200 });
           }
@@ -194,7 +207,7 @@ export default {
             const newDue = clear ? null : normalizeDueDate(rest);
             if (!taskId || (!clear && !newDue)) {
               await send(
-                "সঠিক নিয়ম: <code>/due 1 2026-12-01 18:30</code> বা <code>/due 1 clear</code>"
+                "Usage: <code>/due 1 2026-12-01 18:30</code> or <code>/due 1 clear</code>"
               );
               return new Response("OK", { status: 200 });
             }
@@ -207,9 +220,9 @@ export default {
             await send(
               res.meta.changes > 0
                 ? newDue
-                  ? `করণীয় #${taskId}-এর ডেডলাইন: ${escapeHtml(newDue)}`
-                  : `করণীয় #${taskId}-এর ডেডলাইন মুছে ফেলা হয়েছে।`
-                : `খোলা করণীয় #${taskId} পাওয়া যায়নি।`
+                  ? `Task #${taskId} deadline set to ${escapeHtml(newDue)}`
+                  : `Task #${taskId} deadline removed.`
+                : `Open task #${taskId} not found.`
             );
             return new Response("OK", { status: 200 });
           }
@@ -217,7 +230,7 @@ export default {
           case "/delete": {
             const taskId = parseId(argParts[0]);
             if (!taskId) {
-              await send("সঠিক নিয়ম: <code>/delete 1</code>");
+              await send("Usage: <code>/delete 1</code>");
               return new Response("OK", { status: 200 });
             }
             const res = await env.DB.prepare("DELETE FROM tasks WHERE id = ?")
@@ -225,8 +238,8 @@ export default {
               .run();
             await send(
               res.meta.changes > 0
-                ? `করণীয় #${taskId} মুছে ফেলা হয়েছে।`
-                : `করণীয় #${taskId} পাওয়া যায়নি।`
+                ? `Task #${taskId} deleted.`
+                : `Task #${taskId} not found.`
             );
             return new Response("OK", { status: 200 });
           }
@@ -236,10 +249,10 @@ export default {
               "SELECT id, summary, context, created_at FROM decisions ORDER BY id DESC LIMIT 15"
             ).all<DecisionRow>();
             if (!results.length) {
-              await send("এখনো কোনো সিদ্ধান্ত সংরক্ষিত নেই।");
+              await send("No decisions saved yet.");
             } else {
               const lines = results.map((d) => `• <b>#${d.id}</b> ${escapeHtml(d.summary)}`);
-              await send(`<b>সাম্প্রতিক সিদ্ধান্তসমূহ:</b>\n${lines.join("\n")}`);
+              await send(`<b>Recent decisions:</b>\n${lines.join("\n")}`);
             }
             return new Response("OK", { status: 200 });
           }
@@ -252,12 +265,12 @@ export default {
           }
 
           default:
-            await send("কমান্ডটি চিনতে পারিনি।\n\n" + HELP_TEXT);
+            await send("I do not recognise that command.\n\n" + HELP_TEXT);
             return new Response("OK", { status: 200 });
         }
       }
 
-      // সাধারণ বার্তা -> Claude দিয়ে বিশ্লেষণ
+      // Normal message -> analyse with Claude
       const extracted = await extractWithClaude(
         env.ANTHROPIC_API_KEY,
         env.CLAUDE_MODEL || "claude-haiku-5-5",
@@ -301,14 +314,14 @@ export default {
           .run();
       }
 
-      let reply = escapeHtml(extracted.reply_bn);
+      let reply = escapeHtml(extracted.reply);
       if (skipped > 0) {
-        reply += `\n\n<i>(${skipped}টি আগে থেকেই সংরক্ষিত থাকায় আবার যোগ করা হয়নি)</i>`;
+        reply += `\n\n<i>(${skipped} item(s) were already saved, so I did not add them again)</i>`;
       }
       await send(reply);
     } catch (err) {
       console.error("Handler error:", err instanceof Error ? err.message : String(err));
-      await send("দুঃখিত, বার্তাটি প্রক্রিয়া করতে একটি সমস্যা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।");
+      await send("Sorry, something went wrong while processing your message. Please try again in a moment.");
     }
 
     return new Response("OK", { status: 200 });

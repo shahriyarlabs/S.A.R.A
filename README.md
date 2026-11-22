@@ -1,15 +1,16 @@
-# S.A.R.A. বট (Smart Assistant for Reminders & Actions)
+# S.A.R.A. Bot (Smart Assistant for Reminders & Actions)
 
-Cloudflare Workers + `sara-db` (D1) + Claude (Anthropic API) দিয়ে তৈরি ব্যক্তিগত AI সহকারী।
+A personal AI assistant on Cloudflare Workers + D1 (`sara-db`) + Claude (Anthropic API), controlled through Telegram.
 
-## যা যা আছে
-- বাংলা/ইংরেজি/বাংলিশ মেসেজ থেকে **সিদ্ধান্ত** ও **করণীয়** বের করে `sara-db`-তে সংরক্ষণ (একই জিনিস দুবার যোগ হয় না)
-- **পুনরাবৃত্ত কাজ**: "প্রতিদিন / প্রতি সপ্তাহে / প্রতি মাসে" — `/done` দিলে পরের কাজ নিজে তৈরি হয়
-- কমান্ড: `/tasks`, `/done <id>`, `/edit <id> <শিরোনাম>`, `/due <id> <তারিখ>`, `/delete <id>`, `/decisions`, `/report`, `/help`
-- সকাল ৮:০০ ও রাত ৯:০০টায় অটোমেটিক রিপোর্ট (ঢাকা সময়)
-- প্রতি ১৫ মিনিটে ডেডলাইন রিমাইন্ডার (রাত ১১টা–সকাল ৭টা নীরব সময়)
+## Features
+- Send any message (English, Bangla, Banglish) and Claude extracts **tasks** and **decisions** into the database. Duplicates are skipped.
+- Replies in the same language you write in (English by default).
+- Repeating tasks: "every day / every week / every month". `/done` creates the next one automatically.
+- Commands: `/tasks`, `/done <id>`, `/edit <id> <title>`, `/due <id> <date>`, `/delete <id>`, `/decisions`, `/report`, `/help`
+- Morning report 08:00 and night report 21:00 (Dhaka time)
+- Deadline reminders every 15 minutes (quiet hours 23:00-07:00)
 
-## ফাইল কাঠামো
+## Structure
 ```
 sara-bot/
 ├── wrangler.toml
@@ -25,32 +26,34 @@ sara-bot/
     ├── dates.ts
     └── types.ts
 ```
-> সব `.ts` ফাইল অবশ্যই `src/` ফোল্ডারের ভেতরে রাখতে হবে।
 
-## সেটআপ
-1. **নতুন ডেটাবেস:** `sara-db`-এর Console-এ `schema.sql` রান করুন।
-   **আগের ডেটাবেস থাকলে:** শুধু `migration-step3.sql` রান করুন (`recurrence` কলাম যোগ হবে)।
-2. `wrangler.toml`-এ `database_id` বসান।
-3. ডিপেন্ডেন্সি ইনস্টল ও ডিপ্লয়:
+## Setup
+1. **Database:** run `schema.sql` in the `sara-db` Console. If the tables already exist, run only `migration-step3.sql`.
+2. Put your `database_id` in `wrangler.toml`.
+3. Install and deploy:
    ```
    npm install
    npm run typecheck
    npx wrangler deploy
    ```
-   (GitHub থেকে Cloudflare-এ ডিপ্লয় করলে Build command-এ `npm install` যথেষ্ট।)
-4. সিক্রেট সেট করুন (Dashboard → Variables and Secrets, অথবা `npx wrangler secret put <নাম>`):
-   `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `ALLOWED_TELEGRAM_USER_ID`, `WEBHOOK_SECRET`
-   > `WEBHOOK_SECRET` এখন **বাধ্যতামূলক**। সেট না থাকলে বট সব রিকোয়েস্ট বাতিল করবে।
-   > এটি ১–২৫৬ অক্ষরের হতে হবে; শুধু A-Z, a-z, 0-9, `_`, `-` ব্যবহার করুন।
-5. ব্রাউজারে একবার এই লিংক খুলে ওয়েবহুক চালু করুন:
+4. Set these secrets (Dashboard -> Worker -> Settings -> Variables and Secrets, or `npx wrangler secret put NAME`):
+   - `TELEGRAM_BOT_TOKEN`
+   - `ANTHROPIC_API_KEY` (from https://console.anthropic.com)
+   - `ALLOWED_TELEGRAM_USER_ID` (your numeric Telegram ID; get it from @userinfobot)
+   - `WEBHOOK_SECRET` (any string of letters, digits, `_` or `-`)
+5. Register the webhook by opening this link once in a browser:
    ```
    https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<WORKER_URL>&secret_token=<WEBHOOK_SECRET>
    ```
+   `<WORKER_URL>` looks like `https://sara-bot.<your-subdomain>.workers.dev`.
 
-## নিরাপত্তা নোট
-- `database_id` গোপন তথ্য নয়, তবে রিপো পাবলিক করলে জেনে রাখুন।
-- টোকেন/API কী কখনো রিপোতে কমিট করবেন না।
+## If the bot does not respond
+1. **Open your Worker URL in a browser.** It shows a status page. Every line must say `OK`. Any `MISSING` line is a secret or binding you still need to set. After adding a secret, redeploy.
+2. **Check the webhook:** open `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`.
+   - `url` empty -> you have not run step 5.
+   - `last_error_message` shows 401 or 500 -> `WEBHOOK_SECRET` is missing on the Worker, or differs from the `secret_token` you registered.
+3. **Wrong user ID:** if `ALLOWED_TELEGRAM_USER_ID` is not your ID, the bot silently ignores you.
+4. **Error message in chat:** run `npx wrangler tail` and send a message to see the real error. Common causes: wrong `ANTHROPIC_API_KEY` or no API credit, or the `recurrence` column missing (run `migration-step3.sql`).
 
-## Claude মডেল বদলানো
-`wrangler.toml`-এর `CLAUDE_MODEL` বদলান। ডিফল্ট `claude-haiku-5-5` (দ্রুত ও সস্তা)। আরও নিখুঁত বিশ্লেষণ চাইলে `claude-sonnet-5-5` দিন।
-API কী নিন: https://console.anthropic.com
+## Changing the model
+Edit `CLAUDE_MODEL` in `wrangler.toml`. Default is `claude-haiku-5-5` (fast, cheap). Use `claude-sonnet-5-5` for more accurate extraction.

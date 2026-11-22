@@ -7,7 +7,7 @@ const RECURRENCES: Recurrence[] = ["daily", "weekly", "monthly"];
 const EXTRACT_TOOL = {
   name: "save_extraction",
   description:
-    "Save the decisions and tasks extracted from the user's message, plus a short Bangla reply.",
+    "Save the decisions and tasks extracted from the user's message, plus a short reply.",
   input_schema: {
     type: "object",
     properties: {
@@ -41,9 +41,9 @@ const EXTRACT_TOOL = {
           required: ["title", "due_date", "recurrence"],
         },
       },
-      reply_bn: { type: "string" },
+      reply: { type: "string" },
     },
-    required: ["decisions", "tasks", "reply_bn"],
+    required: ["decisions", "tasks", "reply"],
   },
 };
 
@@ -55,7 +55,7 @@ export async function extractWithClaude(
 ): Promise<ExtractionResult> {
   const { dateTimeStr } = getLocalDateTimeParts(timezone);
 
-  const system = `You are "S.A.R.A." (Smart Assistant for Reminders & Actions), a personal executive assistant for a busy Bangla-speaking user.
+  const system = `You are "S.A.R.A." (Smart Assistant for Reminders & Actions), a personal executive assistant for a busy user who writes in English, Bangla, or Banglish.
 Current local date and time (${timezone}): ${dateTimeStr}.
 
 Analyze the user's message (Bangla, English, or Banglish) and call the save_extraction tool with:
@@ -64,8 +64,8 @@ Analyze the user's message (Bangla, English, or Banglish) and call the save_extr
    - "due_date": resolve relative dates ("আগামীকাল", "পরশু", "next Monday", "রাত ৯টায়") using the current local time above.
      STRICT FORMAT: exactly "YYYY-MM-DD HH:MM" (24-hour, single space, no "T", no seconds, no timezone) when a time is given, or "YYYY-MM-DD" when only a date is given. Use null if no deadline is mentioned.
    - "recurrence": "daily", "weekly" or "monthly" ONLY if the user clearly wants it repeated (e.g. "প্রতিদিন", "every week", "প্রতি মাসে"); otherwise null.
-3. "reply_bn": a concise, natural, helpful confirmation in Bangla summarizing what was saved (or answering directly if it's a general question with no tasks/decisions).
-If nothing is extractable, return empty arrays and answer helpfully in reply_bn.`;
+3. "reply": a concise, natural, helpful confirmation summarizing what was saved (or answering directly if it's a general question with no tasks/decisions). Write the reply in the SAME language the user wrote in (English by default; Bangla only if the user wrote in Bangla).
+If nothing is extractable, return empty arrays and answer helpfully in reply.`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -122,9 +122,9 @@ If nothing is extractable, return empty arrays and answer helpfully in reply_bn.
   return {
     tasks,
     decisions,
-    reply_bn:
-      typeof parsed.reply_bn === "string" && parsed.reply_bn.trim()
-        ? parsed.reply_bn
-        : "বার্তাটি গ্রহণ করা হয়েছে।",
+    reply:
+      typeof parsed.reply === "string" && parsed.reply.trim()
+        ? parsed.reply
+        : "Got it.",
   };
 }
